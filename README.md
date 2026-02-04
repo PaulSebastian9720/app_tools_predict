@@ -6,6 +6,7 @@ FastAPI inference backend, and a Next.js interactive frontend.
 
 **Detected classes**: Hammer, Pliers, Screwdriver, Wrench
 
+![Results](attachments/val_batch0_labels.jpg)
 ---
 
 ## System Architecture
@@ -251,6 +252,10 @@ tools-detection/
 # Opens at http://127.0.0.1:5000
 ```
 
+![Register Epoch-maP50 Mlflow UI](attachments/mAP50.png)
+
+
+
 ### 2. Notebooks (Training)
 
 ```bash
@@ -286,6 +291,11 @@ npm run dev
 
 Opens at `http://localhost:3000`.
 
+![Fronted UI](attachments/fronted_UI.png)
+![Fronted UI](attachments/fronted_UI2.png)
+
+
+
 ---
 
 ## MLflow
@@ -319,8 +329,3 @@ version number or as "latest".
 
 All models evaluated on the same fixed test set (893 images).
 
----
-
-## License
-
-Datasets are licensed under **CC BY 4.0** (Roboflow).
