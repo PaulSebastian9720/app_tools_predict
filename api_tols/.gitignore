@@ -1,0 +1,32 @@
+# ── Python ─────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+
+# ── Virtual environment ───────────────────────────────────────────────
+venv/
+.venv/
+
+# ── Environment variables ─────────────────────────────────────────────
+.env
+.env.*
+
+# ── Model weights ─────────────────────────────────────────────────────
+*.pt
+*.pth
+*.onnx
+
+# ── Storage (runtime data) ────────────────────────────────────────────
+storage/datasets/
+storage/models/
+*.sqlite3
+
+# ── Training artifacts ────────────────────────────────────────────────
+runs/
+
+# ── OS / IDE ──────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
