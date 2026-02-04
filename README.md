@@ -6,7 +6,7 @@ FastAPI inference backend, and a Next.js interactive frontend.
 
 **Detected classes**: Hammer, Pliers, Screwdriver, Wrench
 
-![Results](attachments/val_batch0_labels.jpg)
+![Results](attachments/img/val_batch0_labels.jpg)
 ---
 
 ## System Architecture
@@ -252,7 +252,7 @@ tools-detection/
 # Opens at http://127.0.0.1:5000
 ```
 
-![Register Epoch-maP50 Mlflow UI](attachments/mAP50.png)
+![Register Epoch-maP50 Mlflow UI](attachments/img/mAP50.png)
 
 
 
@@ -291,8 +291,8 @@ npm run dev
 
 Opens at `http://localhost:3000`.
 
-![Fronted UI](attachments/fronted_UI.png)
-![Fronted UI](attachments/fronted_UI2.png)
+![Fronted UI](attachments/img/fronted_UI.png)
+![Fronted UI](attachments/img/fronted_UI2.png)
 
 
 
