@@ -1,21 +1,189 @@
-# Tools Detection — Full-Stack ML Pipeline
+# Tools Detection — YOLOv8 Object Detection Pipeline
 
-End-to-end machine learning system for **detecting hand tools** in images using
-YOLOv8 object detection. Includes a training pipeline in Jupyter notebooks, a
-FastAPI inference backend, and a Next.js interactive frontend.
+## Abstract
 
-**Detected classes**: Hammer, Pliers, Screwdriver, Wrench
+Automatic detection of hand tools in images is a challenging computer vision task due to high intra-class variability, class imbalance, and limited computational resources in lightweight deployment scenarios. These factors often reduce training stability and generalization performance. This work presents an end-to-end system for hand tool detection focused on four common classes: hammer, pliers, screwdriver, and wrench.
 
-![Results](attachments/img/val_batch0_labels.jpg)
+The proposed approach is based on YOLOv8-Nano and leverages transfer learning combined with an incremental fine-tuning strategy. A three-phase iterative methodology is adopted, consisting of dataset preparation and analysis, transfer training using a balanced bootstrap subset, and progressive hyperparameter optimization. This design aims to improve convergence while maintaining computational efficiency and reproducibility.
+
+The model is trained and evaluated on an annotated hand tool dataset with explicit splits for training, validation, and a fixed test set of 893 images, ensuring consistent evaluation. Performance is assessed using mean Average Precision at IoU 0.5 (mAP@50). The final model achieves a mAP@50 of 0.848 on the fixed test set. The system is integrated into a web application using FastAPI and Next.js for interactive inference. Future work includes dataset expansion, additional evaluation metrics, and real-time deployment.
+
 ---
 
-## System Architecture
+## Proposed Method
+
+The pipeline follows a CRISP-DM-inspired methodology adapted for deep learning, organized in three sequential phases. Each phase maps directly to the notebook pipeline (Notebooks 1-5).
+
+```mermaid
+flowchart LR
+    subgraph P1["Phase 1 — Data Preparation"]
+        direction TB
+        A1["1. EDA Class distribution, dimensions, annotations"]
+        A2["2. Stratified Splitting bootstrap · dataset_1 dataset_2 · test"]
+        A3["3. Preprocessing Ultralytics default"]
+        A1 --> A2 --> A3
+    end
+
+    subgraph P2["Phase 2 — Transfer Learning"]
+        direction TB
+        B1["1. Load Pretrained YOLOv8-Nano"]
+        B2["2. Bootstrap Training 199 imgs → Model v1"]
+        B3["3. Incremental Fine-Tuning | v1 1666 imgs | v2 1666 "]
+        B1 --> B2 --> B3
+    end
+
+    subgraph P3["Phase 3 — Optimization & Evaluation"]
+        direction TB
+        C1["1. Hyperparameter Selection lr, epochs, batch, patience"]
+        C2["2. Test Evaluation\nmAP50 · mAP50-95 Precision · Recall · F1"]
+        C3["3. Model Registry MLflow versioning"]
+        C1 --> C2 --> C3
+    end
+
+    P1 --> P2 --> P3
+
+    style P1 fill:#fff,color:#000
+    style P2 fill:#fff,color:#000
+    style P3 fill:#fff,color:#000
+```
+
+---
+
+## Proposed Method Parameters
+
+| Parameter | Value |
+|-----------|-------|
+| Input format | YOLOv8 bbox (4 classes: Hammer, Pliers, Screwdriver, Wrench) |
+| Resize | 640 × 640 px (Ultralytics default augmentations) |
+| Base model | YOLOv8-Nano — 3.2M params, pretrained on COCO |
+| Optimizer | AdamW (lr=0.01, weight_decay=5e-4) |
+| Training | 25–50 epochs, batch size 8, early stopping |
+| Data scaling | 199 → 800 → 1,666 images (incremental) |
+| Test set | 893 images (fixed, never used for training) |
+| Metrics | mAP50, mAP50-95, Precision, Recall, F1 |
+| Tracking | MLflow Model Registry |
+
+### Pipeline Steps
+
+**Input:** 5,204 images with 11 classes in YOLOv8 format (Roboflow)
+
+**Phase 1 — Data Preparation** *(Notebooks 1-2)*
+
+1. **Exploratory Data Analysis**
+   1. Compute image dimension statistics (width, height, aspect ratio)
+   2. Analyze class distribution across training and test splits
+   3. Calculate annotation-per-image statistics and bounding box size distributions
+   4. Visualize sample images with bounding box overlays
+2. **Class Selection & Filtering**
+   1. Merge duplicate classes: `Pliers` (class 6) + `plier` (class 10) → single `Pliers`
+   2. Keep only the top 4 classes (Hammer, Pliers, Screwdriver, Wrench); discard 7 minority classes
+   3. Remap class IDs to 0–3 (contiguous)
+3. **Stratified Splitting**
+   1. Create `bootstrap` subset (199 images) for initial transfer learning
+   2. Create `dataset_1` (800 images) and `dataset_2` (1,666 images) for incremental fine-tuning
+   3. Create fixed `test` set (893 images) from original test split — shared across all models
+
+**Phase 2 — Transfer Learning** *(Notebook 3)*
+
+1. **Load Pretrained Model:** YOLOv8-Nano with COCO weights (80 classes)
+2. **Bootstrap Training:** Train on bootstrap subset (199 images) → Model v1
+3. **Evaluation:** Compute mAP50, mAP50-95, Precision, Recall, F1 on fixed test set
+4. **MLflow Logging:** Log hyperparameters, metrics, training curves, and register model checkpoint
+
+**Phase 3 — Incremental Fine-Tuning** *(Notebook 5)*
+
+1. **Base Model Selection:** Load previous best checkpoint from MLflow Registry
+2. **Error Analysis:** Predict on new training data; identify low-confidence and missed detections
+3. **Fine-Tuning Round 1:** Retrain v1 on dataset_1 (800 images) → Model v2
+4. **Fine-Tuning Round 2:** Retrain v2 on dataset_2 (1,666 images) → Model v3
+5. **Post-Retraining Evaluation:** Compare before vs after metrics on fixed test set
+
+**Phase 4 — Evaluation & Prediction** *(Notebook 4)*
+
+1. **Model Comparison:** Load any model version from MLflow and evaluate on fixed test set
+2. **Results Visualization:** Generate confusion matrices, F1-curves, and prediction samples
+3. **Inference:** Run single-image or batch prediction with confidence thresholds
+
+**Output:** Best model (v3) with mAP50 = 0.848 on fixed test set, registered in MLflow
+
+---
+
+## Design and Experimentation
+
+### Dataset Characteristics
+
+Data sourced from [Roboflow](https://roboflow.com/) under **CC BY 4.0** license.
+
+| Dataset | Format | Images | Classes | Link |
+|---------|--------|--------|---------|------|
+| **Tools Detection** | YOLOv8 bbox | 5,204 | 11 | [paul-space/tools-bynck](https://universe.roboflow.com/paul-space-qcfcl/tools-bynck-wpynu) |
+| **Tools Segmentation** | YOLOv8 seg | 3,097 | 4 | [paul-space/tools-segmentation](https://universe.roboflow.com/paul-space-qcfcl/tools-segmentation-f2nhg-tf2cd) |
+
+The detection dataset is stratified into:
+
+| Split | Images | Purpose |
+|-------|--------|---------|
+| `bootstrap` | 199 | Initial transfer learning (Notebook 3) |
+| `dataset_1` | 800 | First fine-tuning round (Notebook 5) |
+| `dataset_2` | 1,666 | Second fine-tuning round (Notebook 5) |
+| `test` | 893 | Fixed evaluation (never used for training) |
+
+### Optimization Parameters
+
+All models share the same base architecture (YOLOv8-Nano). Optimization isolates the effect of training data volume by keeping hyperparameters constant across versions.
+
+| Parameter | Value |
+|-----------|-------|
+| Architecture | YOLOv8n (3.2M params) |
+| Optimizer | AdamW (lr=0.01, weight_decay=5e-4) |
+| Epochs | 50, 20 (early stopping) |
+| Batch size | 8, 8 |
+| Augmentations | Defautl Ultralytics YoloV8 nano, and resize 640px 640px |
+
+---
+
+## Results
+
+### Model Metrics by Version
+
+| Model | Training Data | mAP50 | mAP50-95 | Precision | Recall | F1 |
+|-------|--------------|-------|----------|-----------|--------|-----|
+| Bootstrap (v1) | bootstrap (199 imgs) | 0.485 | 0.319 | 0.532 | 0.457 | 0.492 |
+| Fine-tune (v2) | dataset_1 (800 imgs) | 0.845 | 0.654 | 0.836 | 0.768 | 0.801 |
+| Fine-tune (v3) | dataset_2 (1,666 imgs) | **0.848** | **0.654** | **0.855** | 0.751 | 0.799 |
+
+All evaluated on the same fixed test set (893 images).
+
+### Training Curves
+
+| Bootstrap (v1) | Fine-tune v2 | Fine-tune v3 |
+|:-:|:-:|:-:|
+| ![results v1](attachments/img/results_v1.png) | ![results v2](attachments/img/results_v2.png) | ![results v3](attachments/img/results_v3.png) |
+
+### Confusion Matrix & F1-Curve Model v3
+
+| Confusion Matrix | F1 Curve |
+|:-:|:-:|
+| ![Confusion Matrix](attachments/img/confusion_matrix_v3.png) | ![F1 Curve](attachments/img/F1_curve_v3.png) |
+
+---
+
+## Conclusions
+
+- Incremental fine-tuning yielded significant gains: mAP50 improved from 0.485 (v1, 199 imgs) to 0.848 (v3, 1666 imgs), a **74.8% increase**.
+- The v2→v3 transition shows **diminishing returns** (mAP50: 0.845 → 0.848), suggesting a performance plateau for the YOLOv8-Nano architecture at this data scale.
+- Precision improves consistently (0.532 → 0.855) while recall stabilizes (~0.75), indicating the model favors confident detections over exhaustive coverage.
+- A **resize-only preprocessing** approach (no extra augmentations) proved sufficient for this domain, simplifying the pipeline without sacrificing accuracy.
+- Systematic tracking via **MLflow Model Registry** enables full reproducibility and direct version comparison across experiments.
+
+---
+
+## Web Application
+
+The system includes a full-stack application for interactive inference and model management.
 
 ```mermaid
 flowchart TB
-    subgraph USER["User"]
-        BROWSER["Browser"]
-    end
 
     subgraph FRONTEND["Frontend — Next.js 16"]
         DASH["Dashboard"]
@@ -24,22 +192,22 @@ flowchart TB
     end
 
     subgraph BACKEND["Backend — FastAPI"]
-        API["REST API\n/api/v1"]
-        STORE["ModelStore\nInference Engine"]
-        WORKER["Training Worker\n(subprocess)"]
+        API["REST API"]
+        STORE["ModelStore Inference Engine"]
+        WORKER["Training Worker"]
     end
 
     subgraph DATA["Data Layer"]
-        DB[("SQLite\ndb.sqlite3")]
-        MLFLOW["MLflow\nTracking Server"]
-        FS["File Storage\nmodels / datasets"]
+        DB[("SQLite -> db.sqlite3")]
+        MLFLOW["MLflow Tracking Server"]
+        FS["File Storage -nmodels  -datasets"]
     end
 
     subgraph NOTEBOOKS["Notebooks — Jupyter"]
-        NB["Training &\nEvaluation\nPipeline"]
+        NB["Training & Evaluation\nPipeline"]
     end
 
-    BROWSER --> FRONTEND
+    
     FRONTEND -->|HTTP REST| API
     API --> STORE
     API --> DB
@@ -50,282 +218,33 @@ flowchart TB
     NB --> MLFLOW
     MLFLOW --> FS
 
-    style FRONTEND fill:#3b82f6,color:#fff
-    style BACKEND fill:#10b981,color:#fff
-    style DATA fill:#f59e0b,color:#000
-    style NOTEBOOKS fill:#8b5cf6,color:#fff
-```
-
----
-
-## Notebook Pipeline
-
-The training pipeline is organized as five sequential notebooks:
-
-```mermaid
-flowchart LR
-    N1["<b>1. EDA</b>\nExploratory\nData Analysis"]
-    N2["<b>2. Transforms</b>\nData Splitting\n& Preprocessing"]
-    N3["<b>3. Transfer Learning</b>\nBootstrap Training\nYOLOv8-Nano"]
-    N4["<b>4. Evaluation</b>\nModel Testing\n& Prediction"]
-    N5["<b>5. Fine-Tuning</b>\nIncremental\nRetraining"]
-
-    N1 --> N2 --> N3 --> N4
-    N3 --> N5 --> N4
-
-    style N1 fill:#3b82f6,color:#fff
-    style N2 fill:#8b5cf6,color:#fff
-    style N3 fill:#f59e0b,color:#000
-    style N4 fill:#10b981,color:#fff
-    style N5 fill:#ef4444,color:#fff
-```
-
-| # | Notebook | What It Does |
-|---|----------|--------------|
-| 1 | **EDA** | Analyze class distribution, image dimensions, annotation statistics |
-| 2 | **Transforms** | Split raw Roboflow data into bootstrap / dataset_1 / dataset_2 / test subsets |
-| 3 | **Transfer Learning** | Train YOLOv8-Nano on the small bootstrap dataset (199 images). Register model in MLflow |
-| 4 | **Evaluation** | Load any model from MLflow Model Registry. Evaluate on the fixed 893-image test set. Single and batch prediction |
-| 5 | **Fine-Tuning** | Load a base model from the registry, retrain on new data, compare before vs. after metrics |
-
-### Model Registry Flow
-
-```mermaid
-flowchart TD
-    TRAIN3["Notebook 3\nBootstrap Training"] -->|register v1| REG["MLflow\nModel Registry\ntools_detection_yolo"]
-    REG -->|load latest| EVAL4["Notebook 4\nEvaluation"]
-    REG -->|load base| FT5["Notebook 5\nFine-Tuning"]
-    FT5 -->|register v2, v3...| REG
-    REG -->|shared store| API["API Backend"]
-```
-
----
-
-## Application Architecture
-
-```mermaid
-flowchart LR
-    subgraph FE["Frontend :3000"]
-        direction TB
-        FE1["Dashboard"]
-        FE2["Predict\nSingle / Batch"]
-        FE3["Training\nDatasets / Jobs / Models"]
-    end
-
-    subgraph BE["Backend :8000"]
-        direction TB
-        BE1["/health"]
-        BE2["/predict/upload\n/predict/batch"]
-        BE3["/datasets\n/train\n/jobs\n/models"]
-    end
-
-    subgraph DB["Database"]
-        direction TB
-        DB1[("SQLite\ndatasets\ntraining_jobs\nmodels")]
-    end
-
-    subgraph ML["ML Layer"]
-        direction TB
-        ML1["YOLO\nInference"]
-        ML2["Training\nWorker"]
-        ML3["MLflow\nTracking"]
-    end
-
-    FE1 --> BE1
-    FE2 --> BE2
-    FE3 --> BE3
-    BE2 --> ML1
-    BE3 --> DB1
-    BE3 --> ML2
-    ML2 --> ML3
-    ML1 --> DB1
-
-    style FE fill:#3b82f6,color:#fff
-    style BE fill:#10b981,color:#fff
-    style DB fill:#f59e0b,color:#000
-    style ML fill:#8b5cf6,color:#fff
+    style FRONTEND fill:#fff,color:#000
+    style BACKEND fill:#fff,color:#000
+    style DATA fill:#fff,color:#000
+    style NOTEBOOKS fill:#fff,color:#000
 ```
 
 ---
 
 ## Technology Stack
 
-### Notebooks / ML Pipeline
+**Notebooks / ML Pipeline**
 
-| Technology | Purpose |
-|------------|---------|
-| ![Python](https://img.shields.io/badge/Python-3.10-3776AB?logo=python&logoColor=white) | Programming language |
-| ![YOLOv8](https://img.shields.io/badge/YOLOv8-Ultralytics-00FFFF?logo=yolo&logoColor=white) | Object detection model |
-| ![PyTorch](https://img.shields.io/badge/PyTorch-1.13-EE4C2C?logo=pytorch&logoColor=white) | Deep learning framework |
-| ![MLflow](https://img.shields.io/badge/MLflow-3.9-0194E2?logo=mlflow&logoColor=white) | Experiment tracking & model registry |
-| ![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-F37626?logo=jupyter&logoColor=white) | Interactive development |
-| ![OpenCV](https://img.shields.io/badge/OpenCV-4.8-5C3EE8?logo=opencv&logoColor=white) | Image processing |
-| ![Pandas](https://img.shields.io/badge/Pandas-150458?logo=pandas&logoColor=white) | Data analysis |
-| ![Matplotlib](https://img.shields.io/badge/Matplotlib-11557C?logo=matplotlib&logoColor=white) | Visualization |
+![Python 3.10](https://img.shields.io/badge/Python-3.10-3776AB?logo=python&logoColor=white) ![YOLOv8 8.0.196](https://img.shields.io/badge/YOLOv8-8.0.196-00FFFF?logo=yolo&logoColor=white) ![PyTorch 1.13](https://img.shields.io/badge/PyTorch-1.13-EE4C2C?logo=pytorch&logoColor=white) ![torchvision 0.14.1](https://img.shields.io/badge/torchvision-0.14.1-EE4C2C?logo=pytorch&logoColor=white) ![MLflow 3.9.0](https://img.shields.io/badge/MLflow-3.9.0-0194E2?logo=mlflow&logoColor=white) ![OpenCV 4.8.1](https://img.shields.io/badge/OpenCV-4.8.1-5C3EE8?logo=opencv&logoColor=white) ![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-F37626?logo=jupyter&logoColor=white) ![Pandas 2.0.3](https://img.shields.io/badge/Pandas-2.0.3-150458?logo=pandas&logoColor=white) ![Matplotlib 3.7.2](https://img.shields.io/badge/Matplotlib-3.7.2-11557C)
 
-### Backend API
+**Backend**
 
-| Technology | Purpose |
-|------------|---------|
-| ![FastAPI](https://img.shields.io/badge/FastAPI-1.0-009688?logo=fastapi&logoColor=white) | REST API framework |
-| ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white) | Lightweight database |
-| ![Uvicorn](https://img.shields.io/badge/Uvicorn-ASGI-499848?logo=gunicorn&logoColor=white) | ASGI server |
+![FastAPI 0.115.0](https://img.shields.io/badge/FastAPI-0.115.0-009688?logo=fastapi&logoColor=white) ![Uvicorn 0.30.0](https://img.shields.io/badge/Uvicorn-0.30.0-499848?logo=gunicorn&logoColor=white) ![SQLite](https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite&logoColor=white) ![Ultralytics 8.2.0](https://img.shields.io/badge/Ultralytics-8.2.0-00FFFF?logo=yolo&logoColor=white) ![PyTorch 2.5.1](https://img.shields.io/badge/PyTorch-2.5.1-EE4C2C?logo=pytorch&logoColor=white)
 
-### Frontend
+**Frontend**
 
-| Technology | Purpose |
-|------------|---------|
-| ![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=next.js&logoColor=white) | React framework |
-| ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black) | UI library |
-| ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white) | Type safety |
-| ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white) | Styling |
+![Next.js 16.1.6](https://img.shields.io/badge/Next.js-16.1.6-000000?logo=next.js&logoColor=white) ![React 19.2.3](https://img.shields.io/badge/React-19.2.3-61DAFB?logo=react&logoColor=black) ![TypeScript 5](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white) ![Tailwind CSS 4](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
 
 ---
 
-## Datasets
+## References
 
-Data sourced from [Roboflow](https://roboflow.com/) — licensed under
-**CC BY 4.0**.
-
-| Dataset | Format | Images | Classes | Link |
-|---------|--------|--------|---------|------|
-| **Tools Detection** | YOLOv8 bbox | 5,204 | 11 | [paul-space-qcfcl/tools-bynck-wpynu](https://universe.roboflow.com/paul-space-qcfcl/tools-bynck-wpynu) |
-| **Tools Segmentation** | YOLOv8 segmentation | 3,097 | 4 | [paul-space-qcfcl/tools-segmentation-f2nhg-tf2cd](https://universe.roboflow.com/paul-space-qcfcl/tools-segmentation-f2nhg-tf2cd) |
-
-### Preprocessed Splits
-
-After running Notebook 2, the detection dataset is split into:
-
-| Split | Images | Purpose |
-|-------|--------|---------|
-| `bootstrap` | 199 | Initial transfer learning (Notebook 3) |
-| `dataset_1` | 800 | First fine-tuning round (Notebook 5) |
-| `dataset_2` | 1,666 | Second fine-tuning round (Notebook 5) |
-| `test` | 893 | Fixed evaluation set (never used for training) |
-
----
-
-## Project Structure
-
-```
-tools-detection/
-├── README.md                   # This file
-├── launch_mlflow_ui.sh         # Start MLflow UI/tracking server
-│
-├── notebooks/                  # ML training pipeline
-│   ├── 1_EDA_tools.ipynb
-│   ├── 2_Transforms.ipynb
-│   ├── 3_Model_trasfer_learning.ipynb
-│   ├── 4_Evaluation_model.ipynb
-│   ├── 5_Incremental_fine_tuning.ipynb
-│   ├── utils/                  # Shared Python modules
-│   ├── data/                   # Roboflow datasets
-│   ├── mlruns/                 # MLflow tracking store
-│   ├── runs/                   # YOLO training outputs
-│   └── requirements.txt
-│
-├── api_tols/                   # FastAPI backend
-│   ├── app/
-│   │   ├── main.py             # Entry point
-│   │   ├── routers/            # API endpoints
-│   │   ├── models_store.py     # YOLO inference engine
-│   │   ├── database.py         # SQLite ORM
-│   │   └── training_worker.py  # Background training
-│   ├── storage/                # Runtime data (DB, models, datasets)
-│   └── requirements.txt
-│
-└── fronted_tols/               # Next.js frontend
-    ├── app/                    # Pages (Dashboard, Predict, Training)
-    ├── components/             # Reusable UI components
-    ├── lib/                    # API client & types
-    └── package.json
-```
-
----
-
-## Quick Start
-
-### 1. MLflow Tracking Server
-
-```bash
-./launch_mlflow_ui.sh
-# Opens at http://127.0.0.1:5000
-```
-
-![Register Epoch-maP50 Mlflow UI](attachments/img/mAP50.png)
-
-
-
-### 2. Notebooks (Training)
-
-```bash
-cd notebooks
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-jupyter notebook
-```
-
-Run notebooks 1 through 5 in order. Models are automatically registered in
-MLflow after training.
-
-### 3. API Backend
-
-```bash
-cd api_tols
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-API docs available at `http://localhost:8000/docs`.
-
-### 4. Frontend
-
-```bash
-cd fronted_tols
-npm install
-npm run dev
-```
-
-Opens at `http://localhost:3000`.
-
-![Fronted UI](attachments/img/fronted_UI.png)
-![Fronted UI](attachments/img/fronted_UI2.png)
-
-
-
----
-
-## MLflow
-
-All components share a single MLflow tracking store at `notebooks/mlruns/`.
-The `launch_mlflow_ui.sh` script starts the MLflow server that both notebooks
-and the API connect to.
-
-```mermaid
-flowchart LR
-    NB["Notebooks"] -->|train & register| MLF["MLflow Server\n:5000"]
-    API["API Backend"] -->|read models| MLF
-    MLF -->|file store| FS["notebooks/mlruns/"]
-
-    style MLF fill:#8b5cf6,color:#fff
-```
-
-Models are registered under `tools_detection_yolo` in the Model Registry.
-Each training or fine-tuning run creates a new version that can be loaded by
-version number or as "latest".
-
----
-
-## Training Results
-
-| Model | Dataset | mAP50 | mAP50-95 | Precision | Recall | F1 |
-|-------|---------|-------|----------|-----------|--------|-----|
-| Bootstrap (v1) | bootstrap (199 imgs) | 0.485 | 0.319 | 0.532 | 0.457 | 0.492 |
-| Fine-tune (v2) | dataset_1 (800 imgs) | 0.845 | 0.654 | 0.836 | 0.768 | 0.801 |
-| Fine-tune (v3) | dataset_2 (1,666 imgs) | 0.848 | 0.644 | 0.855 | 0.751 | 0.799 |
-
-All models evaluated on the same fixed test set (893 images).
-
+- **Ultralytics YOLOv8**: Jocher, G., Chaurasia, A., & Qiu, J. (2023). *YOLO by Ultralytics*. https://github.com/ultralytics/ultralytics
+- **Tools Detection Dataset (Roboflow)**: https://universe.roboflow.com/paul-space-qcfcl/tools-bynck-wpynu
+- **Tools Segmentation Dataset (Roboflow)**: https://universe.roboflow.com/paul-space-qcfcl/tools-segmentation-f2nhg-tf2cd
+- **MLflow**: Zaharia, M. et al. (2018). *Accelerating the Machine Learning Lifecycle with MLflow*. https://mlflow.org
