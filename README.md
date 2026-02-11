@@ -248,3 +248,18 @@ flowchart TB
 - **Tools Detection Dataset (Roboflow)**: https://universe.roboflow.com/paul-space-qcfcl/tools-bynck-wpynu
 - **Tools Segmentation Dataset (Roboflow)**: https://universe.roboflow.com/paul-space-qcfcl/tools-segmentation-f2nhg-tf2cd
 - **MLflow**: Zaharia, M. et al. (2018). *Accelerating the Machine Learning Lifecycle with MLflow*. https://mlflow.org
+
+---
+
+## Contact Information
+
+For questions related to the detection tools settings or project playback details, please contact us using the links below or by opening an issue in this repository.
+
+### Authors
+- **Paúl Sebastián Naspud Vivar**  
+  [![GitHub](https://img.shields.io/badge/GitHub-PaulSebastian9720-black)](https://github.com/PaulSebastian9720)
+  [![Email](https://img.shields.io/badge/Email-naspud972012%40gmail.com-black)](mailto:naspud972012@gmail.com)
+
+- **Jennyfer Camila Ramírez Saeteros**  
+  [![GitHub](https://img.shields.io/badge/GitHub-jennyfer04ramirez-black)](https://github.com/jennyfer04ramirez)
+  [![Email](https://img.shields.io/badge/Email-jr.6311.camm%40gmail.com-black)](mailto:jr.6311.camm@gmail.com)
